@@ -1,17 +1,6 @@
-const express = require("express");
-const WebSocket = require("ws");
-const http = require("http");
+
 const uuidv4 = require("uuid/v4");
 
-const app = express();
-
-const port = process.env.PORT || 9000;
-
-//initialize a http server
-const server = http.createServer(app);
-
-//initialize the WebSocket server instance
-const wss = new WebSocket.Server({ server });
 
 let users = {};
 
@@ -32,129 +21,7 @@ const sendToAll = (clients, type, { id, name: userName }) => {
   })
 };
 
-wss.on("connection", ws => {
-  ws.on("message", msg => {
-    console.log("Received message: %s", msg);
-    let data;
 
-    //accepting only JSON messages
-    try {
-      data = JSON.parse(msg);
-    } catch (e) {
-      console.log("Invalid JSON");
-      data = {};
-    }
-    const { type, name, offer, answer, candidate } = data;
-    switch (type) {
-      //when a user tries to login
-      case "login":
-        //Check if username is available
-        if (users[name]) {
-          sendTo(ws, {
-            type: "login",
-            success: false,
-            message: "Username is unavailable"
-          });
-        } else {
-          const id = uuidv4();
-          const loggedIn = Object.values(
-            users
-          ).map(({ id, name: userName }) => ({ id, userName }));
-          // const loggedIn = Object.keys(users).map(user => ({ userName: user }));
-          users[name] = ws;
-          ws.name = name;
-          ws.id = id;
-
-          sendTo(ws, {
-            type: "login",
-            success: true,
-            users: loggedIn
-          });
-          sendToAll(users, "updateUsers", ws);
-        }
-        break;
-      case "offer":
-        //if UserBexists then send him offer details
-        const offerRecipient = users[name];
-
-        if (!!offerRecipient) {
-          //setting that sender connected with cecipient
-          ws.otherName = name;
-          sendTo(offerRecipient, {
-            type: "offer",
-            offer,
-            name: ws.name
-          });
-        }
-        break;
-      case "answer":
-        //for ex. UserB answers UserA
-        const answerRecipient = users[name];
-
-        if (!!answerRecipient) {
-          ws.otherName = name;
-          sendTo(answerRecipient, {
-            type: "answer",
-            answer
-          });
-        }
-        break;
-      case "candidate":
-        const candidateRecipient = users[name];
-
-        if (!!candidateRecipient) {
-          sendTo(candidateRecipient, {
-            type: "candidate",
-            candidate
-          });
-        }
-        break;
-      case "leave":
-        recipient = users[name];
-
-        //notify the other user so he can disconnect his peer connection
-        if (!!recipient) {
-          recipient.otherName = null;
-          sendTo(recipient, {
-            type: "leave"
-          });
-        }
-        break;
-      default:
-        sendTo(ws, {
-          type: "error",
-          message: "Command not found: " + type
-        });
-        break;
-    }
-  });
-
-  ws.on("close", function() {
-    if (ws.name) {
-      delete users[ws.name];
-      if (ws.otherName) {
-        console.log("Disconnecting from ", ws.otherName);
-        const recipient = users[ws.otherName];
-        if (!!recipient) {
-          recipient.otherName = null;
-        }
-      }
-      sendToAll(users, "removeUser", ws);
-    }
-  });
-  //send immediatly a feedback to the incoming connection
-  ws.send(
-    JSON.stringify({
-      type: "connect",
-      message: "Well hello there, I am a WebSocket server"
-    })
-  );
-});
-
-//start our server
-server.listen(port, () => {
-  console.log(`Server started on port ${server.address().port} :)`);
-});
 
 "use strict";
 
@@ -330,10 +197,10 @@ function handleWebRequest(request, response) {
 // Spin up the HTTPS server on the port assigned to this sample.
 // This will be turned into a WebSocket port very shortly.
 
-const port2 = process.env.PORT || 6503;
+const port = process.env.PORT || 9000
 
-webServer.listen(port2, function() {
-  log("Server is listening on port "+ port2);
+webServer.listen(port, function() {
+  log("Server is listening on port "+ port);
 });
 
 // Create the WebSocket server by converting the HTTPS server into one.
@@ -351,6 +218,8 @@ if (!wsServer) {
 // called whenever a user connects to the server's port using the
 // WebSocket protocol.
 
+
+
 wsServer.on('request', function(request) {
   if (!originIsAllowed(request.origin)) {
     request.reject();
@@ -361,6 +230,8 @@ wsServer.on('request', function(request) {
   // Accept the request and get a connection.
 
   var connection = request.accept("json", request.origin);
+
+  const ws = connection;
 
   // Add the new connection to our list of connections.
 
@@ -379,95 +250,215 @@ wsServer.on('request', function(request) {
   };
   connection.sendUTF(JSON.stringify(msg));
 
+  //send immediatly a feedback to the incoming connection
+  ws.send(
+    JSON.stringify({
+      type: "connect",
+      message: "Well hello there, I am a WebSocket server"
+    })
+  );
+
   // Set up a handler for the "message" event received over WebSocket. This
   // is a message sent by a client, and may be text to share with other
   // users, a private message (text or signaling) for one user, or a command
   // to the server.
 
   connection.on('message', function(message) {
-    if (message.type === 'utf8') {
-      log("Received Message: " + message.utf8Data);
-
-      // Process incoming data.
-
-      var sendToClients = true;
-      msg = JSON.parse(message.utf8Data);
-      var connect = getConnectionForID(msg.id);
-
-      // Take a look at the incoming object and act on it based
-      // on its type. Unknown message types are passed through,
-      // since they may be used to implement client-side features.
-      // Messages with a "target" property are sent only to a user
-      // by that name.
-
-      switch(msg.type) {
-        // Public, textual message
-        case "message":
-          msg.name = connect.username;
-          msg.text = msg.text.replace(/(<([^>]+)>)/ig, "");
+    msg = JSON.parse(message.utf8Data);
+    
+      let data;
+      let flag = false;
+      //accepting only JSON messages
+      console.log("menssagem: "+message.utf8Data);
+      try {
+        data = JSON.parse(message.utf8Data);
+      } catch (e) {
+        console.log("Invalid JSON");
+        data = {};
+      }
+      const { type, name, offer, answer, candidate } = data;
+      console.log("type: "+type);
+      switch (type) {
+        //when a user tries to login
+        case "login":
+          //Check if username is available
+          if (users[name]) {
+            sendTo(ws, {
+              type: "login",
+              success: false,
+              message: "Username is unavailable"
+            });
+          } else {
+            const id = uuidv4();
+            const loggedIn = Object.values(
+              users
+            ).map(({ id, name: userName }) => ({ id, userName }));
+            // const loggedIn = Object.keys(users).map(user => ({ userName: user }));
+            users[name] = ws;
+            ws.name = name;
+            ws.id = id;
+            console.log("Login aqui!!");
+            sendTo(ws, {
+              type: "login",
+              success: true,
+              users: loggedIn
+            });
+            sendToAll(users, "updateUsers", ws);
+          }
           break;
+        case "offer":
+          //if UserBexists then send him offer details
+          const offerRecipient = users[name];
 
-        // Username change
-        case "username":
-          var nameChanged = false;
-          var origName = msg.name;
-
-          // Ensure the name is unique by appending a number to it
-          // if it's not; keep trying that until it works.
-          while (!isUsernameUnique(msg.name)) {
-            msg.name = origName + appendToMakeUnique;
-            appendToMakeUnique++;
-            nameChanged = true;
+          if (!!offerRecipient) {
+            //setting that sender connected with cecipient
+            ws.otherName = name;
+            sendTo(offerRecipient, {
+              type: "offer",
+              offer,
+              name: ws.name
+            });
           }
+          break;
+        case "answer":
+          //for ex. UserB answers UserA
+          const answerRecipient = users[name];
 
-          // If the name had to be changed, we send a "rejectusername"
-          // message back to the user so they know their name has been
-          // altered by the server.
-          if (nameChanged) {
-            var changeMsg = {
-              id: msg.id,
-              type: "rejectusername",
-              name: msg.name
-            };
-            connect.sendUTF(JSON.stringify(changeMsg));
+          if (!!answerRecipient) {
+            ws.otherName = name;
+            sendTo(answerRecipient, {
+              type: "answer",
+              answer
+            });
           }
+          break;
+        case "candidate":
+          const candidateRecipient = users[name];
 
-          // Set this connection's final username and send out the
-          // updated user list to all users. Yeah, we're sending a full
-          // list instead of just updating. It's horribly inefficient
-          // but this is a demo. Don't do this in a real app.
-          connect.username = msg.name;
-          sendUserListToAll();
-          sendToClients = false;  // We already sent the proper responses
+          if (!!candidateRecipient) {
+            sendTo(candidateRecipient, {
+              type: "candidate",
+              candidate
+            });
+          }
+          break;
+        case "leave":
+          recipient = users[name];
+
+          //notify the other user so he can disconnect his peer connection
+          if (!!recipient) {
+            recipient.otherName = null;
+            sendTo(recipient, {
+              type: "leave"
+            });
+          }
+          break;
+        default:
+          flag = true;
+          /*sendTo(ws, {
+            type: "error",
+            message: "Command not found: " + type
+          });*/
           break;
       }
+   
+      if (message.type === 'utf8' && flag) {
+        log("Received Message: " + message.utf8Data);
 
-      // Convert the revised message back to JSON and send it out
-      // to the specified client or all clients, as appropriate. We
-      // pass through any messages not specifically handled
-      // in the select block above. This allows the clients to
-      // exchange signaling and other control objects unimpeded.
+        // Process incoming data.
 
-      if (sendToClients) {
-        var msgString = JSON.stringify(msg);
-        var i;
+        var sendToClients = true;
+        msg = JSON.parse(message.utf8Data);
+        var connect = getConnectionForID(msg.id);
 
-        // If the message specifies a target username, only send the
-        // message to them. Otherwise, send it to every user.
-        if (msg.target && msg.target !== undefined && msg.target.length !== 0) {
-          sendToOneUser(msg.target, msgString);
-        } else {
-          for (i=0; i<connectionArray.length; i++) {
-            connectionArray[i].sendUTF(msgString);
+        // Take a look at the incoming object and act on it based
+        // on its type. Unknown message types are passed through,
+        // since they may be used to implement client-side features.
+        // Messages with a "target" property are sent only to a user
+        // by that name.
+
+        switch(msg.type) {
+          // Public, textual message
+          case "message":
+            msg.name = connect.username;
+            msg.text = msg.text.replace(/(<([^>]+)>)/ig, "");
+            break;
+
+          // Username change
+          case "username":
+            var nameChanged = false;
+            var origName = msg.name;
+
+            // Ensure the name is unique by appending a number to it
+            // if it's not; keep trying that until it works.
+            while (!isUsernameUnique(msg.name)) {
+              msg.name = origName + appendToMakeUnique;
+              appendToMakeUnique++;
+              nameChanged = true;
+            }
+
+            // If the name had to be changed, we send a "rejectusername"
+            // message back to the user so they know their name has been
+            // altered by the server.
+            if (nameChanged) {
+              var changeMsg = {
+                id: msg.id,
+                type: "rejectusername",
+                name: msg.name
+              };
+              connect.sendUTF(JSON.stringify(changeMsg));
+            }
+
+            // Set this connection's final username and send out the
+            // updated user list to all users. Yeah, we're sending a full
+            // list instead of just updating. It's horribly inefficient
+            // but this is a demo. Don't do this in a real app.
+            connect.username = msg.name;
+            sendUserListToAll();
+            sendToClients = false;  // We already sent the proper responses
+            break;
+        }
+
+        // Convert the revised message back to JSON and send it out
+        // to the specified client or all clients, as appropriate. We
+        // pass through any messages not specifically handled
+        // in the select block above. This allows the clients to
+        // exchange signaling and other control objects unimpeded.
+
+        if (sendToClients) {
+          var msgString = JSON.stringify(msg);
+          var i;
+
+          // If the message specifies a target username, only send the
+          // message to them. Otherwise, send it to every user.
+          if (msg.target && msg.target !== undefined && msg.target.length !== 0) {
+            sendToOneUser(msg.target, msgString);
+          } else {
+            for (i=0; i<connectionArray.length; i++) {
+              connectionArray[i].sendUTF(msgString);
+            }
           }
         }
       }
-    }
+    
   });
 
   // Handle the WebSocket "close" event; this means a user has logged off
   // or has been disconnected.
   connection.on('close', function(reason, description) {
+
+    if (ws.name) {
+      delete users[ws.name];
+      if (ws.otherName) {
+        console.log("Disconnecting from ", ws.otherName);
+        const recipient = users[ws.otherName];
+        if (!!recipient) {
+          recipient.otherName = null;
+        }
+      }
+      sendToAll(users, "removeUser", ws);
+    }
+
     // First, remove the connection from the list of connections.
     connectionArray = connectionArray.filter(function(el, idx, ar) {
       return el.connected;
