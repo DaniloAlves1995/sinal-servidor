@@ -76,14 +76,15 @@ function isUsernameUnique(name) {
 // Sends a message (which is already stringified JSON) to a single
 // user, given their username. We use this for the WebRTC signaling,
 // and we could use it for private text messaging.
-function sendToOneUser(target, msgString) {
+function sendToOneUser(msg, msgString) {
   var isUnique = true;
   var i;
 
   for (i=0; i<connectionArray.length; i++) {
-    if (connectionArray[i].username === target) {
+    //Envia para o destinatário (target) e, caso o tipo seja de msg de txt ou encerrar a chamada, para o para o próprio usuário (id) tbm
+    if (connectionArray[i].username === msg.target || (connectionArray[i].clientID === msg.id && (msg.type == "message2" || msg.type == "message" || msg.type == "hang-up"))) {
       connectionArray[i].sendUTF(msgString);
-      break;
+      //break;
     }
   }
 }
@@ -421,6 +422,7 @@ wsServer.on('request', function(request) {
             // but this is a demo. Don't do this in a real app.
             connect.username = msg.name;
             sendUserListToAll();
+            console.log("Enviou para todos");
             sendToClients = false;  // We already sent the proper responses
             break;
         }
@@ -438,8 +440,10 @@ wsServer.on('request', function(request) {
           // If the message specifies a target username, only send the
           // message to them. Otherwise, send it to every user.
           if (msg.target && msg.target !== undefined && msg.target.length !== 0) {
-            sendToOneUser(msg.target, msgString);
+            console.log("Enviou para 1");
+            sendToOneUser(msg, msgString);
           } else {
+            console.log("Enviou para todos");
             for (i=0; i<connectionArray.length; i++) {
               connectionArray[i].sendUTF(msgString);
             }
