@@ -106,6 +106,20 @@ function getConnectionForID(id) {
   return connect;
 }
 
+function atualizarID(id_antigo, id_novo) {
+  var connect = null;
+  var i;
+
+  for (i=0; i<connectionArray.length; i++) {
+    if (connectionArray[i].clientID === id_antigo) {
+      connectionArray[i].clientID = id_novo;
+      break;
+    }
+  }
+
+  return connect;
+}
+
 // Builds a message object of type "userlist" which contains the names of
 // all connected users. Used to ramp up newly logged-in users and,
 // inefficiently, to handle name change notifications.
@@ -119,7 +133,7 @@ function makeUserListMessage() {
   // Add the users to the list
 
   for (i=0; i<connectionArray.length; i++) {
-    userListMsg.users.push(connectionArray[i].username);
+    userListMsg.users.push({clientID: connectionArray[i].clientID, username: connectionArray[i].username});
   }
 
   return userListMsg;
@@ -395,6 +409,8 @@ wsServer.on('request', function(request) {
           case "username":
             var nameChanged = false;
             var origName = msg.name;
+            connection.clientID = msg.idnovo;
+            atualizarID(msg.id, msg.idnovo);
 
             // Ensure the name is unique by appending a number to it
             // if it's not; keep trying that until it works.
@@ -425,7 +441,7 @@ wsServer.on('request', function(request) {
             console.log("Enviou para todos");
             sendToClients = false;  // We already sent the proper responses
             break;
-        }
+          }
 
         // Convert the revised message back to JSON and send it out
         // to the specified client or all clients, as appropriate. We
