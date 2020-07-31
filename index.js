@@ -404,6 +404,13 @@ wsServer.on('request', function(request) {
             msg.name = connect.username;
             msg.text = msg.text.replace(/(<([^>]+)>)/ig, "");
             break;
+          
+          case "listUsers":
+            msg.name = connect.username;
+            var userListMsg = makeUserListMessage();
+            msg.text = JSON.stringify(userListMsg);
+            console.log(msg);
+            break;
 
           // Username change
           case "username":
